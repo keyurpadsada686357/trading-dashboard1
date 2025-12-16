@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Strategies Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .header .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-card .subvalue {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .strategies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .strategy-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .strategy-card h3 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .strategy-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .status-running {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-stopped {
+            background: #ef4444;
+            color: white;
+        }
+
+        .strategy-info {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .strategy-info div {
+            margin: 8px 0;
+            font-size: 0.95em;
+        }
+
+        .strategy-info strong {
+            color: #667eea;
+        }
+
+        .trades-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .trades-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .trades-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            padding: 10px 20px;
+            border: none;
+            background: #f3f4f6;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .trades-table {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .trade-win {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .trade-loss {
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .logs-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .log-entry {
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            border-left: 3px solid #ccc;
+        }
+
+        .log-info {
+            background: #f0f9ff;
+            border-left-color: #3b82f6;
+        }
+
+        .log-success {
+            background: #f0fdf4;
+            border-left-color: #10b981;
+        }
+
+        .log-warning {
+            background: #fffbeb;
+            border-left-color: #f59e0b;
+        }
+
+        .log-error {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+        }
+
+        .log-timestamp {
+            color: #6b7280;
+            margin-right: 10px;
+        }
+
+        .log-strategy {
+            font-weight: bold;
+            margin-right: 10px;
+            color: #667eea;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Trading Strategies Dashboard</h1>
+            <p class="subtitle">
+                <span class="live-indicator"></span>
+                Live Monitoring • Real-time Updates
+            </p>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <h3>Total Trades</h3>
+                <div class="value" id="totalTrades">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Win Rate</h3>
+                <div class="value" id="winRate">0%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total P&L</h3>
+                <div class="value" id="totalPnl">$0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Strategies</h3>
+                <div class="value" id="activeStrategies">0</div>
+            </div>
+        </div>
+
+        <div class="strategies-grid" id="strategiesGrid">
+            <!-- Strategies will be populated here -->
+        </div>
+
+        <div class="trades-section">
+            <h2>📋 Live Logs</h2>
+            <div class="logs-container" id="logsContainer">
+                <div class="loading">Loading logs...</div>
+            </div>
+        </div>
+
+        <div class="trades-section">
+            <h2>📊 Recent Trades</h2>
+            <div class="trades-tabs">
+                <button class="tab-button active" onclick="showTrades('all')">All Trades</button>
+                <button class="tab-button" onclick="showTrades('trendline_1min')">Trendline 1-min</button>
+                <button class="tab-button" onclick="showTrades('trendline_5min')">Trendline 5-min</button>
+                <button class="tab-button" onclick="showTrades('trendline_15min')">Trendline 15-min</button>
+                <button class="tab-button" onclick="showTrades('volume_1min')">Volume 1-min</button>
+            </div>
+            <div class="trades-table" id="tradesTable">
+                <div class="loading">Loading trades...</div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Data</button>
+    </div>
+
+    <script>
+        let allTrades = {};
+        let currentTab = 'all';
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            // Auto-refresh every 10 seconds
+            setInterval(refreshData, 10000);
+        });
+
+        async function refreshData() {
+            await Promise.all([
+                loadStats(),
+                loadStrategies(),
+                loadTrades(),
+                loadLogs()
+            ]);
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+
+                let totalTrades = 0;
+                let totalWins = 0;
+                let totalPnl = 0;
+
+                Object.values(stats).forEach(s => {
+                    totalTrades += s.total_trades || 0;
+                    totalWins += s.wins || 0;
+                    totalPnl += s.total_pnl || 0;
+                });
+
+                const winRate = totalTrades > 0 ? (totalWins / totalTrades * 100) : 0;
+
+                document.getElementById('totalTrades').textContent = totalTrades;
+                document.getElementById('winRate').textContent = winRate.toFixed(1) + '%';
+                document.getElementById('totalPnl').textContent = '$' + totalPnl.toFixed(2);
+
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadStrategies() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                const grid = document.getElementById('strategiesGrid');
+                grid.innerHTML = '';
+
+                let activeCount = 0;
+                Object.entries(data.strategies).forEach(([name, status]) => {
+                    if (status.status === 'running') activeCount++;
+
+                    const card = document.createElement('div');
+                    card.className = 'strategy-card';
+                    card.innerHTML = `
+                        <h3>${name}</h3>
+                        <span class="strategy-status status-${status.status}">
+                            ${status.status.toUpperCase()}
+                        </span>
+                        <div class="strategy-info">
+                            <div><strong>Position:</strong> ${status.position || 'None'}</div>
+                            <div><strong>Last Update:</strong> ${status.last_update || 'N/A'}</div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                document.getElementById('activeStrategies').textContent = activeCount;
+
+            } catch (error) {
+                console.error('Error loading strategies:', error);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+
+                const container = document.getElementById('logsContainer');
+
+                if (data.logs.length === 0) {
+                    container.innerHTML = '<div class="loading">No logs yet</div>';
+                    return;
+                }
+
+                // Show last 50 logs, most recent first
+                const logs = data.logs.slice(-50).reverse();
+
+                container.innerHTML = logs.map(log => `
+                    <div class="log-entry log-${log.level}">
+                        <span class="log-timestamp">${log.timestamp}</span>
+                        <span class="log-strategy">${log.strategy}:</span>
+                        <span>${log.message}</span>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        async function loadTrades() {
+            try {
+                const response = await fetch('/api/trades');
+                allTrades = await response.json();
+                showTrades(currentTab);
+            } catch (error) {
+                console.error('Error loading trades:', error);
+            }
+        }
+
+        function showTrades(tab) {
+            currentTab = tab;
+
+            // Update active tab button
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event?.target?.classList.add('active');
+
+            let trades = [];
+            if (tab === 'all') {
+                Object.values(allTrades).forEach(t => trades.push(...t));
+            } else {
+                trades = allTrades[tab] || [];
+            }
+
+            // Sort by trade_id descending (most recent first)
+            trades.sort((a, b) => b.trade_id - a.trade_id);
+
+            // Show only last 50 trades
+            trades = trades.slice(0, 50);
+
+            const tableDiv = document.getElementById('tradesTable');
+
+            if (trades.length === 0) {
+                tableDiv.innerHTML = '<div class="loading">No trades yet</div>';
+                return;
+            }
+
+            tableDiv.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Direction</th>
+                            <th>Entry Time</th>
+                            <th>Entry Price</th>
+                            <th>Exit Price</th>
+                            <th>P&L</th>
+                            <th>P&L %</th>
+                            <th>Duration</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${trades.map(trade => `
+                            <tr>
+                                <td>${trade.trade_id}</td>
+                                <td>${trade.direction}</td>
+                                <td>${trade.entry_time}</td>
+                                <td>$${trade.entry_price?.toFixed(2) || 'N/A'}</td>
+                                <td>$${trade.exit_price?.toFixed(2) || 'N/A'}</td>
+                                <td class="${trade.is_win ? 'trade-win' : 'trade-loss'}">
+                                    $${trade.pnl?.toFixed(2) || '0.00'}
+                                </td>
+                                <td class="${trade.is_win ? 'trade-win' : 'trade-loss'}">
+                                    ${trade.pnl_pct?.toFixed(2) || '0.00'}%
+                                </td>
+                                <td>${trade.duration_minutes?.toFixed(1) || '0'}m</td>
+                                <td>${trade.exit_reason || 'N/A'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    </script>
+</body>
+
+</html>

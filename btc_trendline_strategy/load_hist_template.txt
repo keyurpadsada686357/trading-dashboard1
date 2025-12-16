@@ -1,0 +1,52 @@
+def load_historical_candles():
+    """Load last 100 candles from API for immediate startup"""
+    global candle_data
+    
+    print("📥 Loading historical candles...")
+    
+    try:
+        # Calculate lookback based on interval
+        lookback_minutes = 120 * CANDLE_INTERVAL  # 120 candles worth
+        now = int(time.time())
+        from_ts = now - (lookback_minutes * 60)
+        
+        params = {
+            "symbol": SYMBOL,
+            "resolution": str(CANDLE_INTERVAL),
+            "from": from_ts,
+            "to": now
+        }
+        
+        r = requests.get(CANDLE_API, params=params, timeout=10)
+        js = r.json()
+        
+        if "result" in js and js["result"].get("s") == "ok":
+            res = js["result"]
+            
+            for i in range(len(res["t"])):
+                candle_time = dt.datetime.fromtimestamp(res["t"][i])
+                
+                candle_data.append({
+                    'timestamp': candle_time,
+                    'open': res["o"][i],
+                    'high': res["h"][i],
+                    'low': res["l"][i],
+                    'close': res["c"][i],
+                    'volume': res["v"][i]
+                })
+            
+            print(f"✅ Loaded {len(candle_data)} historical candles!")
+            if len(candle_data) >= MIN_CANDLES_REQUIRED:
+                print(f"🎯 Ready to trade immediately!\n")
+            else:
+                print(f"⏳ Need {MIN_CANDLES_REQUIRED - len(candle_data)} more candles...\n")
+            
+            return True
+        else:
+            print(f"⚠️  Could not load historical data, will build from live stream\n")
+            return False
+            
+    except Exception as e:
+        print(f"⚠️  Error loading history: {e}")
+        print(f"📊 Will build candles from live stream instead\n")
+        return False
