@@ -30,6 +30,18 @@ CANDLE_INTERVAL = 5  # 5 minutes
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TRADES_FILE = os.path.join(SCRIPT_DIR, f"trades_{CANDLE_INTERVAL}min.json")
 
+# Import unified storage
+import sys
+parent_dir = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, parent_dir)
+from utils.trade_storage import TradeStorage
+
+# Initialize storage handler (JSON + MongoDB if configured)
+storage = TradeStorage(
+    json_file=TRADES_FILE,
+    collection_name=f'trendline_trades_{CANDLE_INTERVAL}min'
+)
+
 # MaxCapital Strategy Parameters
 LOOKBACK_SWING = 3
 VOLUME_MA_DAYS = 20
@@ -57,6 +69,9 @@ current_candle = {
     'close': 0,
     'volume': 0
 }
+
+# Heartbeat counter
+received_trade_count = 0
 
 
 def load_historical_candles():
@@ -373,7 +388,7 @@ def close_position(exit_price, reason):
     print(f"📊 P&L: {color}${pnl:+,.2f} ({pnl_pct:+.2f}%){Style.RESET_ALL if HAS_COLOR else ''}")
     print(f"{'='*80}\n")
     
-    # Save to JSON
+    # Save trade
     trade = {
         'trade_id': trade_id,
         'direction': 'LONG',
@@ -390,16 +405,8 @@ def close_position(exit_price, reason):
         'is_win': is_win
     }
     
-    # Load and save
-    trades = []
-    if os.path.exists(TRADES_FILE):
-        with open(TRADES_FILE, 'r') as f:
-            trades = json.load(f)
-    
-    trades.append(trade)
-    
-    with open(TRADES_FILE, 'w') as f:
-        json.dump(trades, f, indent=2)
+    # Save using unified storage (JSON + MongoDB if configured)
+    storage.save_trade(trade)
     
     # Reset
     current_position = None
@@ -428,8 +435,14 @@ def on_message(ws, message):
 
 def process_trade(trade):
     """Process individual trade"""
-    global current_candle
+    global current_candle, received_trade_count
     
+    # Heartbeat to show it's running
+    received_trade_count += 1
+    if received_trade_count % 50 == 0:
+        price = float(trade.get("price", 0))
+        print(f"\r⏳ [5m] Monitoring... ${price:,.2f} ({received_trade_count} trades)", end="", flush=True)
+
     price = float(trade.get("price", 0))
     size = float(trade.get("size", 0))
     timestamp = trade.get("timestamp", 0)
@@ -507,12 +520,8 @@ def main():
     """Main entry point"""
     global trade_id
     
-    # Load previous trades
-    if os.path.exists(TRADES_FILE):
-        with open(TRADES_FILE, 'r') as f:
-            trades = json.load(f)
-            if trades:
-                trade_id = trades[-1]['trade_id'] + 1
+    # Load previous trades to get next ID
+    trade_id = storage.get_next_trade_id()
     
     print(f"🚀 Starting {CANDLE_INTERVAL}-min Bitcoin Trendline Strategy...")
     

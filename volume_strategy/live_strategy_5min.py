@@ -31,7 +31,21 @@ STOP_LOSS_PCT = 0.15   # 0.15%
 MAX_HOLD_MINUTES = 30
 
 # Trade Tracking
-TRADES_FILE = "trades_5min.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TRADES_FILE = os.path.join(SCRIPT_DIR, "trades_5min.json")
+
+# Import unified storage
+import sys
+parent_dir = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, parent_dir)
+from utils.trade_storage import TradeStorage
+
+# Initialize storage handler (JSON + MongoDB if configured)
+storage = TradeStorage(
+    json_file=TRADES_FILE,
+    collection_name='volume_trades_5min'
+)
+
 current_position = None  # None, "LONG", or "SHORT"
 entry_price = 0
 entry_time = None
@@ -51,28 +65,6 @@ minute_low = float('inf')
 minute_close = 0
 current_price = 0
 
-
-# -------------------------------------
-# LOAD/SAVE TRADES
-# -------------------------------------
-def load_trades():
-    """Load existing trades from JSON file"""
-    if os.path.exists(TRADES_FILE):
-        try:
-            with open(TRADES_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return []
-    return []
-
-
-def save_trade(trade_data):
-    """Save trade to JSON file"""
-    trades = load_trades()
-    trades.append(trade_data)
-    
-    with open(TRADES_FILE, 'w') as f:
-        json.dump(trades, f, indent=2)
 
 
 # -------------------------------------
@@ -505,7 +497,8 @@ def close_position(reason, pnl, pnl_pct):
         'is_win': is_win
     }
     
-    save_trade(trade_data)
+    # Save using unified storage (JSON + MongoDB if configured)
+    storage.save_trade(trade_data)
     
     # Reset position
     current_position = None
@@ -643,9 +636,7 @@ def main():
     global trade_id
     
     # Load previous trades to get next ID
-    trades = load_trades()
-    if trades:
-        trade_id = trades[-1]['trade_id'] + 1
+    trade_id = storage.get_next_trade_id()
     
     print("🚀 Starting Volume-Price Strategy...")
     print(f"📂 Trades file: {TRADES_FILE}\n")

@@ -18,7 +18,7 @@ from flask_cors import CORS
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import strategies
-from btc_trendline_strategy import btc_trendline_1min, btc_trendline_5min, btc_trendline_15min
+from btc_trendline_strategy import btc_trendline_1min, btc_trendline_5min, btc_trendline_15min, btc_trendline_60min
 from volume_strategy import live_strategy, live_strategy_5min
 from utils.trade_storage import TradeStorage
 
@@ -34,6 +34,7 @@ strategy_status = {
     "BTC Trendline 1-min": {"status": "running", "position": None, "last_update": None},
     "BTC Trendline 5-min": {"status": "running", "position": None, "last_update": None},
     "BTC Trendline 15-min": {"status": "running", "position": None, "last_update": None},
+    "BTC Trendline 60-min": {"status": "running", "position": None, "last_update": None},
     "Volume Strategy 1-min": {"status": "running", "position": None, "last_update": None},
     "Volume Strategy 5-min": {"status": "running", "position": None, "last_update": None},
 }
@@ -75,6 +76,7 @@ def get_trades():
         "trendline_1min": [],
         "trendline_5min": [],
         "trendline_15min": [],
+        "trendline_60min": [],
         "volume_1min": []
     }
     
@@ -82,7 +84,7 @@ def get_trades():
         script_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Trendline trades
-        for timeframe in ['1', '5', '15']:
+        for timeframe in ['1', '5', '15', '60']:
             storage = TradeStorage(
                 json_file=os.path.join(script_dir, f'btc_trendline_strategy/trades_{timeframe}min.json'),
                 collection_name=f'trendline_trades_{timeframe}min'
@@ -113,6 +115,7 @@ def get_stats():
             ('trendline_1min', 'btc_trendline_strategy/trades_1min.json', 'trendline_trades_1min'),
             ('trendline_5min', 'btc_trendline_strategy/trades_5min.json', 'trendline_trades_5min'),
             ('trendline_15min', 'btc_trendline_strategy/trades_15min.json', 'trendline_trades_15min'),
+            ('trendline_60min', 'btc_trendline_strategy/trades_60min.json', 'trendline_trades_60min'),
             ('volume_1min', 'volume_strategy/trades_1min.json', 'volume_trades_1min'),
         ]
         
@@ -165,6 +168,10 @@ STRATEGIES = {
         "enabled": True,
         "module": btc_trendline_15min
     },
+    "BTC Trendline 60-min": {
+        "enabled": True,
+        "module": btc_trendline_60min
+    },
     "Volume Strategy 1-min": {
         "enabled": True,
         "module": live_strategy
@@ -209,6 +216,15 @@ def run_strategy(name, module):
                 time.sleep(wait_time)
 
 
+def heartbeat_logger():
+    """Periodically log heartbeat to show system is alive"""
+    while True:
+        time.sleep(15)  # Every 15 seconds
+        for name, config in STRATEGIES.items():
+            if config["enabled"]:
+                log_to_dashboard(name, "✓ Active", "info")
+
+
 def main():
     """Main entry point - start all enabled strategies and web dashboard"""
     print("=" * 80)
@@ -224,6 +240,14 @@ def main():
         name="Web Dashboard"
     )
     dashboard_thread.start()
+    
+    # Start heartbeat logger in background thread
+    heartbeat_thread = threading.Thread(
+        target=heartbeat_logger,
+        daemon=True,
+        name="Heartbeat Logger"
+    )
+    heartbeat_thread.start()
     
     print(f"\n📊 Enabled Strategies:")
     
@@ -244,6 +268,9 @@ def main():
             )
             thread.start()
             threads.append(thread)
+            
+            # Small delay between starts to avoid WebSocket overload
+            time.sleep(2)
         else:
             print(f"   ⏸️  {name} (disabled)")
     

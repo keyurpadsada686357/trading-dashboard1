@@ -8,7 +8,7 @@ import os
 # -------------------------------------
 CANDLE_API = "https://cdn.india.deltaex.org/v2/chart/history"
 SYMBOL = "BTCUSD"
-RESOLUTION = "5"
+RESOLUTION = "1"
 DATA_FOLDER = "Data"
 
 # -------------------------------------

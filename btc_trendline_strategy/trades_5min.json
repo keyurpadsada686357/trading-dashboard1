@@ -1,0 +1,17 @@
+[
+  {
+    "trade_id": 1,
+    "direction": "LONG",
+    "entry_time": "2025-12-17 05:25:00",
+    "exit_time": "2025-12-17 05:55:00",
+    "entry_price": 87830.0,
+    "exit_price": 87469.28571428571,
+    "stop_loss": 87469.28571428571,
+    "target": 88118.64285714286,
+    "duration_minutes": 30.0,
+    "pnl": -360.71,
+    "pnl_pct": -0.4107,
+    "exit_reason": "STOP_LOSS",
+    "is_win": false
+  }
+]

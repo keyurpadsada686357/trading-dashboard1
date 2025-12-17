@@ -30,6 +30,18 @@ CANDLE_INTERVAL = 15  # 15 minutes
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TRADES_FILE = os.path.join(SCRIPT_DIR, f"trades_{CANDLE_INTERVAL}min.json")
 
+# Import unified storage
+import sys
+parent_dir = os.path.dirname(SCRIPT_DIR)
+sys.path.insert(0, parent_dir)
+from utils.trade_storage import TradeStorage
+
+# Initialize storage handler (JSON + MongoDB if configured)
+storage = TradeStorage(
+    json_file=TRADES_FILE,
+    collection_name=f'trendline_trades_{CANDLE_INTERVAL}min'
+)
+
 # MaxCapital Strategy Parameters
 LOOKBACK_SWING = 3
 VOLUME_MA_DAYS = 20
@@ -57,6 +69,9 @@ current_candle = {
     'close': 0,
     'volume': 0
 }
+
+# Heartbeat counter
+received_trade_count = 0
 
 
 def load_historical_candles():
@@ -390,16 +405,8 @@ def close_position(exit_price, reason):
         'is_win': is_win
     }
     
-    # Load and save
-    trades = []
-    if os.path.exists(TRADES_FILE):
-        with open(TRADES_FILE, 'r') as f:
-            trades = json.load(f)
-    
-    trades.append(trade)
-    
-    with open(TRADES_FILE, 'w') as f:
-        json.dump(trades, f, indent=2)
+    # Save using unified storage (JSON + MongoDB if configured)
+    storage.save_trade(trade)
     
     # Reset
     current_position = None
@@ -428,8 +435,14 @@ def on_message(ws, message):
 
 def process_trade(trade):
     """Process individual trade"""
-    global current_candle
+    global current_candle, received_trade_count
     
+    # Heartbeat to show it's running
+    received_trade_count += 1
+    if received_trade_count % 50 == 0:
+        price = float(trade.get("price", 0))
+        print(f"\r⏳ [15m] Monitoring... ${price:,.2f} ({received_trade_count} trades)", end="", flush=True)
+
     price = float(trade.get("price", 0))
     size = float(trade.get("size", 0))
     timestamp = trade.get("timestamp", 0)
@@ -496,23 +509,26 @@ def on_open(ws):
 
 
 def on_error(ws, error):
+    import traceback
     print(f"❌ Error: {error}")
+    print(f"📋 Error Type: {type(error).__name__}")
+    traceback.print_exc()
 
 
 def on_close(ws, close_status_code, close_msg):
     print(f"\n🔌 Connection closed")
+    if close_status_code:
+        print(f"   Status Code: {close_status_code}")
+    if close_msg:
+        print(f"   Message: {close_msg}")
 
 
 def main():
     """Main entry point"""
     global trade_id
     
-    # Load previous trades
-    if os.path.exists(TRADES_FILE):
-        with open(TRADES_FILE, 'r') as f:
-            trades = json.load(f)
-            if trades:
-                trade_id = trades[-1]['trade_id'] + 1
+    # Load previous trades to get next ID
+    trade_id = storage.get_next_trade_id()
     
     print(f"🚀 Starting {CANDLE_INTERVAL}-min Bitcoin Trendline Strategy...")
     
