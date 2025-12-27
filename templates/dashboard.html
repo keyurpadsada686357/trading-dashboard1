@@ -319,6 +319,11 @@
                 <span class="live-indicator"></span>
                 Live Monitoring • Real-time Updates
             </p>
+            <div style="margin-top: 20px; font-size: 2em; font-weight: bold;">
+                <span style="color: #667eea;">BTC:</span>
+                <span id="btcPrice" style="color: #333;">$--,---</span>
+                <span id="btcChange" style="font-size: 0.6em; margin-left: 10px;"></span>
+            </div>
         </div>
 
         <div class="stats-grid" id="statsGrid">
@@ -346,6 +351,10 @@
 
         <div class="trades-section">
             <h2>📋 Live Logs</h2>
+            <div class="trades-tabs">
+                <button class="tab-button log-tab active" onclick="showLogs('all')">All Logs</button>
+                <button class="tab-button log-tab" onclick="showLogs('RSI_Options_Trader')">RSI Options Logs</button>
+            </div>
             <div class="logs-container" id="logsContainer">
                 <div class="loading">Loading logs...</div>
             </div>
@@ -355,10 +364,15 @@
             <h2>📊 Recent Trades</h2>
             <div class="trades-tabs">
                 <button class="tab-button active" onclick="showTrades('all')">All Trades</button>
+                <button class="tab-button" onclick="showTrades('rsi_options')">RSI Options</button>
                 <button class="tab-button" onclick="showTrades('trendline_1min')">Trendline 1-min</button>
                 <button class="tab-button" onclick="showTrades('trendline_5min')">Trendline 5-min</button>
                 <button class="tab-button" onclick="showTrades('trendline_15min')">Trendline 15-min</button>
                 <button class="tab-button" onclick="showTrades('trendline_60min')">Trendline 60-min</button>
+                <button class="tab-button" onclick="showTrades('trendline_1min_trailing')">1-min Trailing</button>
+                <button class="tab-button" onclick="showTrades('trendline_5min_trailing')">5-min Trailing</button>
+                <button class="tab-button" onclick="showTrades('trendline_15min_trailing')">15-min Trailing</button>
+                <button class="tab-button" onclick="showTrades('trendline_60min_trailing')">60-min Trailing</button>
                 <button class="tab-button" onclick="showTrades('volume_1min')">Volume 1-min</button>
             </div>
             <div class="trades-table" id="tradesTable">
@@ -372,13 +386,56 @@
     <script>
         let allTrades = {};
         let currentTab = 'all';
+        let currentLogTab = 'all';  // Track current log filter
+        let lastBtcPrice = null;
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', () => {
             refreshData();
             // Auto-refresh every 10 seconds
             setInterval(refreshData, 10000);
+            // Update BTC price every 2 seconds
+            setInterval(updateBtcPrice, 2000);
+            updateBtcPrice(); // Initial load
         });
+
+        async function updateBtcPrice() {
+            try {
+                const response = await fetch('https://api.delta.exchange/v2/tickers/BTCUSD');
+                const data = await response.json();
+
+                if (data.result) {
+                    const price = parseFloat(data.result.close);
+                    const priceElement = document.getElementById('btcPrice');
+                    const changeElement = document.getElementById('btcChange');
+
+                    priceElement.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                    // Show price change with color
+                    if (lastBtcPrice !== null) {
+                        const change = price - lastBtcPrice;
+                        const changePercent = (change / lastBtcPrice) * 100;
+
+                        if (change > 0) {
+                            priceElement.style.color = '#10b981';
+                            changeElement.textContent = '+' + change.toFixed(2) + ' (+' + changePercent.toFixed(2) + '%)';
+                            changeElement.style.color = '#10b981';
+                        } else if (change < 0) {
+                            priceElement.style.color = '#ef4444';
+                            changeElement.textContent = change.toFixed(2) + ' (' + changePercent.toFixed(2) + '%)';
+                            changeElement.style.color = '#ef4444';
+                        } else {
+                            priceElement.style.color = '#333';
+                            changeElement.textContent = '';
+                        }
+                    }
+
+                    lastBtcPrice = price;
+                }
+            } catch (error) {
+                console.error('Error fetching BTC price:', error);
+            }
+        }
 
         async function refreshData() {
             await Promise.all([
@@ -450,14 +507,34 @@
         }
 
         async function loadLogs() {
+            await showLogs(currentLogTab);
+        }
+
+        async function showLogs(strategy) {
+            currentLogTab = strategy;
+
+            // Update active tab button for logs
+            document.querySelectorAll('.log-tab').forEach(btn => {
+                btn.classList.remove('active');
+                // Set active based on strategy name in onclick
+                if (btn.getAttribute('onclick')?.includes(`'${strategy}'`)) {
+                    btn.classList.add('active');
+                }
+            });
+
             try {
-                const response = await fetch('/api/logs');
+                let url = '/api/logs';
+                if (strategy !== 'all') {
+                    url = `/api/logs/${strategy}`;
+                }
+
+                const response = await fetch(url);
                 const data = await response.json();
 
                 const container = document.getElementById('logsContainer');
 
-                if (data.logs.length === 0) {
-                    container.innerHTML = '<div class="loading">No logs yet</div>';
+                if (!data.logs || data.logs.length === 0) {
+                    container.innerHTML = '<div class="loading">No logs yet for this strategy</div>';
                     return;
                 }
 
@@ -490,8 +567,8 @@
         function showTrades(tab) {
             currentTab = tab;
 
-            // Update active tab button
-            document.querySelectorAll('.tab-button').forEach(btn => {
+            // Update active tab button for trades only
+            document.querySelectorAll('.tab-button:not(.log-tab)').forEach(btn => {
                 btn.classList.remove('active');
             });
             event?.target?.classList.add('active');

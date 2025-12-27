@@ -77,9 +77,9 @@ Edit `main.py` and change `"enabled": True/False`:
 
 ```python
 STRATEGIES = {
-    "BTC Trendline 1-min": {
-        "enabled": True,  # ← Change this
-        "module": btc_trendline_1min
+    "BTC Trendline 5-min": {
+        "enabled": True,
+        "module": btc_trendline_5min
     },
     # ... other strategies
 }
@@ -94,7 +94,7 @@ Each strategy has its own parameters in its respective file:
   - `TAKE_PROFIT_PCT` - Take profit percentage
   - `STOP_LOSS_PCT` - Stop loss percentage
 
-- **Trendline Strategy**: `btc_trendline_strategy/btc_trendline_1min.py`
+- **Trendline Strategy**: `btc_trendline_strategy/btc_trendline_5min.py`
   - `ATR_SL_MULT` - Stop loss ATR multiplier
   - `TARGET_ATR_MULT` - Target ATR multiplier
   - `LOOKBACK_SWING` - Swing point detection period
@@ -164,7 +164,6 @@ Or use the Render dashboard's shell feature.
 ├── render.yaml                      # Render config (NEW)
 ├── .gitignore                       # Git ignore (NEW)
 ├── btc_trendline_strategy/
-│   ├── btc_trendline_1min.py       # 1-min trendline strategy
 │   ├── btc_trendline_5min.py       # 5-min trendline strategy
 │   ├── btc_trendline_15min.py      # 15-min trendline strategy
 │   ├── compare_trendline.py        # Compare performance

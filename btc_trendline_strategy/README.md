@@ -31,7 +31,6 @@ Multi-timeframe trendline breakout strategy based on the ₹313K winning MaxCapi
 
 | Timeframe | Script | Trades JSON |
 |-----------|--------|-------------|
-| **1-MIN** | `btc_trendline_1min.py` | `trades_1min.json` |
 | **5-MIN** | `btc_trendline_5min.py` | `trades_5min.json` |
 | **15-MIN** | `btc_trendline_15min.py` | `trades_15min.json` |
 
@@ -41,18 +40,15 @@ Multi-timeframe trendline breakout strategy based on the ₹313K winning MaxCapi
 
 ## 🚀 **How to Run**
 
-### **Option 1: Run All 3 Timeframes (Recommended)**
+### **Option 1: Run Both Timeframes (Recommended)**
 
 ```powershell
 cd btc_trendline_strategy
 
-# Terminal 1 - 1-MIN
-python btc_trendline_1min.py
-
-# Terminal 2 - 5-MIN
+# Terminal 1 - 5-MIN
 python btc_trendline_5min.py
 
-# Terminal 3 - 15-MIN
+# Terminal 2 - 15-MIN
 python btc_trendline_15min.py
 ```
 
@@ -61,7 +57,6 @@ python btc_trendline_15min.py
 ```powershell
 cd btc_trendline_strategy
 
-Start-Process python -ArgumentList "btc_trendline_1min.py" -WindowStyle Normal
 Start-Process python -ArgumentList "btc_trendline_5min.py" -WindowStyle Normal
 Start-Process python -ArgumentList "btc_trendline_15min.py" -WindowStyle Normal
 ```

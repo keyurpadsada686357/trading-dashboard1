@@ -1,6 +1,7 @@
 """
-Bitcoin Trendline Breakout Strategy - 15 Minute
+Bitcoin Trendline Breakout Strategy - 1 Minute - TRAILING STOP
 Based on MaxCapital stock strategy adapted for crypto
+Uses trailing stop instead of fixed target
 """
 import websocket
 import json
@@ -24,7 +25,7 @@ except:
 WEBSOCKET_URL = "wss://socket.india.delta.exchange"
 CANDLE_API = "https://cdn.india.deltaex.org/v2/chart/history"
 SYMBOL = "BTCUSD"
-CANDLE_INTERVAL = 15  # 15 minutes
+CANDLE_INTERVAL = 1  # 1 minute
 
 # Get script directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +40,7 @@ from utils.trade_storage import TradeStorage
 # Initialize storage handler (JSON + MongoDB if configured)
 storage = TradeStorage(
     json_file=TRADES_FILE,
-    collection_name=f'trendline_trades_{CANDLE_INTERVAL}min'
+    collection_name=f'trendline_trailing_trades_{CANDLE_INTERVAL}min'
 )
 
 # MaxCapital Strategy Parameters
@@ -47,16 +48,21 @@ LOOKBACK_SWING = 3
 VOLUME_MA_DAYS = 20
 VOLUME_MA_MULT = 1.2
 ATR_LENGTH = 14
-ATR_SL_MULT = 1.0
-TARGET_ATR_MULT = 3.0
-MIN_CANDLES_REQUIRED = 30  # Lower for 15-min
+ATR_SL_MULT = 1  # Tighter initial stop (was 1.0)
+MIN_CANDLES_REQUIRED = 60  # Higher for 1-min
+
+# Trailing Stop Parameters
+BREAKEVEN_ATR_MULT = 1.0  # Move to breakeven when profit >= 1 ATR
+TRAIL_START_ATR_MULT = 2.0  # Start trailing when profit >= 2 ATR
+TRAIL_DISTANCE_ATR_MULT = 1.0  # Trail 1 ATR below highest price
 
 # Trading state
 current_position = None
 entry_price = 0
 entry_time = None
+entry_atr = 0
 stop_loss = 0
-target = 0
+highest_price = 0  # Track highest price since entry
 trade_id = 1
 
 # Candle storage
@@ -270,14 +276,13 @@ def check_entry_signal(df):
     else:
         ref_low_price = df.loc[i, 'low']
     
+    # Tighter initial stop (0.5 ATR instead of 1.0)
     sl = ref_low_price - ATR_SL_MULT * entry_atr
-    tgt = curr_close + TARGET_ATR_MULT * entry_atr
     
     return {
         'entry_price': float(curr_close),
         'atr': float(entry_atr),
         'stop_loss': float(sl),
-        'target': float(tgt),
         'timestamp': df.loc[i, 'timestamp']
     }
 
@@ -326,22 +331,54 @@ def finalize_candle():
 
 def open_position(signal):
     """Open new position"""
-    global current_position, entry_price, entry_time, stop_loss, target
+    global current_position, entry_price, entry_time, stop_loss, entry_atr, highest_price
     
     current_position = "LONG"
     entry_price = signal['entry_price']
     entry_time = dt.datetime.now()
     stop_loss = signal['stop_loss']
-    target = signal['target']
+    entry_atr = signal['atr']
+    highest_price = entry_price  # Initialize highest price
     
     print(f"\n{'='*80}")
-    print(f"{Fore.GREEN if HAS_COLOR else ''}🟢 LONG BREAKOUT - POSITION #{trade_id}{Style.RESET_ALL if HAS_COLOR else ''}")
+    print(f"{Fore.GREEN if HAS_COLOR else ''}🟢 LONG BREAKOUT (TRAILING) - POSITION #{trade_id}{Style.RESET_ALL if HAS_COLOR else ''}")
     print(f"{'='*80}")
     print(f"⏰ Time: {entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"💰 Entry: ${entry_price:,.2f}")
-    print(f"🎯 Target: ${target:,.2f} (ATR: {signal['atr']:.2f})")
-    print(f"🛑 Stop: ${stop_loss:,.2f}")
+    print(f"🛑 Initial Stop: ${stop_loss:,.2f} (ATR: {entry_atr:.2f})")
+    print(f"📈 Trailing: Breakeven @ {BREAKEVEN_ATR_MULT}x ATR, Trail @ {TRAIL_START_ATR_MULT}x ATR")
     print(f"{'='*80}\n")
+
+
+def update_trailing_stop():
+    """Update trailing stop based on current price"""
+    global stop_loss, highest_price
+    
+    current_price = candle_data[-1]['close']
+    current_high = candle_data[-1]['high']
+    
+    # Update highest price
+    if current_high > highest_price:
+        highest_price = current_high
+    
+    profit = current_price - entry_price
+    profit_atr = profit / entry_atr
+    
+    # Move to breakeven when profit >= 1 ATR
+    if profit_atr >= BREAKEVEN_ATR_MULT:
+        breakeven_stop = entry_price
+        if stop_loss < breakeven_stop:
+            old_stop = stop_loss
+            stop_loss = breakeven_stop
+            print(f"🔒 Stop moved to BREAKEVEN: ${stop_loss:,.2f} (was ${old_stop:,.2f})")
+    
+    # Start trailing when profit >= 2 ATR
+    if profit_atr >= TRAIL_START_ATR_MULT:
+        trail_stop = highest_price - (TRAIL_DISTANCE_ATR_MULT * entry_atr)
+        if trail_stop > stop_loss:
+            old_stop = stop_loss
+            stop_loss = trail_stop
+            print(f"📈 Trailing stop updated: ${stop_loss:,.2f} (was ${old_stop:,.2f}) | High: ${highest_price:,.2f}")
 
 
 def check_exit():
@@ -351,22 +388,20 @@ def check_exit():
     if not current_position:
         return
     
+    # Update trailing stop first
+    update_trailing_stop()
+    
     current = candle_data[-1]
     
-    # Check stop loss
+    # Check stop loss (only exit condition)
     if current['low'] <= stop_loss:
-        close_position(stop_loss, "STOP_LOSS")
-        return
-    
-    # Check target
-    if current['high'] >= target:
-        close_position(target, "TARGET")
+        close_position(stop_loss, "TRAILING_STOP")
         return
 
 
 def close_position(exit_price, reason):
     """Close position and log trade"""
-    global current_position, entry_price, entry_time, trade_id
+    global current_position, entry_price, entry_time, trade_id, highest_price
     
     exit_time = dt.datetime.now()
     duration = (exit_time - entry_time).total_seconds() / 60
@@ -384,11 +419,12 @@ def close_position(exit_price, reason):
     print(f"{'='*80}")
     print(f"💰 Entry: ${entry_price:,.2f}")
     print(f"💰 Exit: ${exit_price:,.2f}")
+    print(f"📊 Highest: ${highest_price:,.2f}")
     print(f"⏱️  Duration: {duration:.1f} min")
     print(f"📊 P&L: {color}${pnl:+,.2f} ({pnl_pct:+.2f}%){Style.RESET_ALL if HAS_COLOR else ''}")
     print(f"{'='*80}\n")
     
-    # Save trade
+    # Save to JSON
     trade = {
         'trade_id': trade_id,
         'direction': 'LONG',
@@ -397,7 +433,7 @@ def close_position(exit_price, reason):
         'entry_price': entry_price,
         'exit_price': exit_price,
         'stop_loss': stop_loss,
-        'target': target,
+        'highest_price': highest_price,
         'duration_minutes': round(duration, 2),
         'pnl': round(pnl, 2),
         'pnl_pct': round(pnl_pct, 4),
@@ -412,6 +448,7 @@ def close_position(exit_price, reason):
     current_position = None
     entry_price = 0
     entry_time = None
+    highest_price = 0
     trade_id += 1
 
 
@@ -441,14 +478,14 @@ def process_trade(trade):
     received_trade_count += 1
     if received_trade_count % 50 == 0:
         price = float(trade.get("price", 0))
-        print(f"\r⏳ [5m] Monitoring... ${price:,.2f} ({received_trade_count} trades)", end="", flush=True)
+        print(f"\r⏳ [1m-TRAIL] Monitoring... ${price:,.2f} ({received_trade_count} trades)", end="", flush=True)
 
     price = float(trade.get("price", 0))
     size = float(trade.get("size", 0))
     timestamp = trade.get("timestamp", 0)
     
     trade_time = dt.datetime.fromtimestamp(timestamp / 1000000)
-    # Round to 5-minute intervals
+    # Round to 1-minute intervals
     candle_time = trade_time.replace(second=0, microsecond=0)
     candle_time = candle_time.replace(minute=(candle_time.minute // CANDLE_INTERVAL) * CANDLE_INTERVAL)
     
@@ -481,15 +518,17 @@ def process_trade(trade):
 def on_open(ws):
     """Handle connection open"""
     print(f"\n{'='*80}")
-    print(f"{Fore.CYAN if HAS_COLOR else ''}🚀 BITCOIN TRENDLINE BREAKOUT [{CANDLE_INTERVAL}-MIN]{Style.RESET_ALL if HAS_COLOR else ''}")
+    print(f"{Fore.CYAN if HAS_COLOR else ''}🚀 BITCOIN TRENDLINE BREAKOUT [{CANDLE_INTERVAL}-MIN TRAILING]{Style.RESET_ALL if HAS_COLOR else ''}")
     print(f"{'='*80}")
     print(f"📊 Symbol: {SYMBOL}")
     print(f"⏱️  Timeframe: {CANDLE_INTERVAL} minute")
     print(f"💾 Trades: {TRADES_FILE}")
     print(f"\n📋 Strategy:")
     print(f"   - Descending trendline breakout")
-    print(f"   - ATR-based stops ({ATR_SL_MULT}x)")
-    print(f"   - ATR-based targets ({TARGET_ATR_MULT}x)")
+    print(f"   - ATR-based initial stop ({ATR_SL_MULT}x)")
+    print(f"   - Breakeven @ {BREAKEVEN_ATR_MULT}x ATR profit")
+    print(f"   - Trailing @ {TRAIL_START_ATR_MULT}x ATR profit")
+    print(f"   - Trail distance: {TRAIL_DISTANCE_ATR_MULT}x ATR")
     print(f"   - Volume confirmation ({VOLUME_MA_MULT}x)")
     print(f"\n⌨️  Press Ctrl+C to stop\n{'='*80}\n")
     
@@ -509,11 +548,18 @@ def on_open(ws):
 
 
 def on_error(ws, error):
+    import traceback
     print(f"❌ Error: {error}")
+    print(f"📋 Error Type: {type(error).__name__}")
+    traceback.print_exc()
 
 
 def on_close(ws, close_status_code, close_msg):
     print(f"\n🔌 Connection closed")
+    if close_status_code:
+        print(f"   Status Code: {close_status_code}")
+    if close_msg:
+        print(f"   Message: {close_msg}")
 
 
 def main():
@@ -523,7 +569,7 @@ def main():
     # Load previous trades to get next ID
     trade_id = storage.get_next_trade_id()
     
-    print(f"🚀 Starting {CANDLE_INTERVAL}-min Bitcoin Trendline Strategy...")
+    print(f"🚀 Starting {CANDLE_INTERVAL}-min Bitcoin Trendline Strategy (TRAILING STOP)...")
     
     try:
         ws = websocket.WebSocketApp(
