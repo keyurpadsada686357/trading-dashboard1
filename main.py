@@ -370,6 +370,18 @@ def main():
     print("=" * 80)
     print(f"⏰ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
+    # Get and display server IP for Delta Exchange whitelisting
+    try:
+        import requests
+        ip_response = requests.get('https://api.ipify.org?format=json', timeout=5)
+        server_ip = ip_response.json().get('ip', 'Unknown')
+        print("=" * 80)
+        print(f"🌐 SERVER OUTBOUND IP: {server_ip}")
+        print(f"📌 WHITELIST THIS IP IN DELTA EXCHANGE!")
+        print("=" * 80)
+    except Exception as e:
+        print(f"⚠️  Could not fetch server IP: {e}")
+    
     # Start web dashboard in background thread
     dashboard_thread = threading.Thread(
         target=run_dashboard,

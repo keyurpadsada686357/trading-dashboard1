@@ -47,7 +47,7 @@ class TradeStorage:
                 self.mongo_client.admin.command('ping')
                 
                 # Get database and collection
-                db = self.mongo_client['trading_strategies']
+                db = self.mongo_client['trading_strategies_production']
                 self.mongo_collection = db[self.collection_name]
                 
                 self.mongo_enabled = True
